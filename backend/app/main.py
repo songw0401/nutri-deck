@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import os
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
@@ -26,21 +27,43 @@ from app.services.mission_service import (
     generate_mission,
 )
 from app.services.nutrition_service import calculate_totals
+from app.services.public_data_sync import (
+    env_flag,
+    get_sync_status,
+    load_backend_env,
+    sync_menuzen_data,
+)
 
 food_repo = FoodRepository()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    food_repo.all()  # 데이터 파일/스키마를 서버 시작 시 검증
+    load_backend_env()
+
+    # 운영/심사 환경에서만 켜면 서버 시작 시 메뉴젠 Open API를 갱신한다.
+    # 실패하더라도 이미 검증된 캐시가 있으면 서비스는 계속 실행한다.
+    if env_flag("SYNC_MENUZEN_ON_STARTUP", False):
+        try:
+            metadata = sync_menuzen_data()
+            food_repo.refresh()
+            print(
+                "[Nutri-Deck] MenuGen API sync complete: {0} menus".format(
+                    metadata.get("usable_game_menu_count", 0)
+                )
+            )
+        except Exception as exc:
+            print("[Nutri-Deck] MenuGen API sync skipped/failed: {0}".format(exc))
+
+    food_repo.all()  # 캐시 데이터/스키마 검증
     init_db()
     yield
 
 
 app = FastAPI(
     title="Nutri-Deck API",
-    version="1.0.0",
-    description="뉴트리 덱 목업용 FastAPI 백엔드",
+    version="1.1.0",
+    description="뉴트리 덱 게임 백엔드",
     lifespan=lifespan,
 )
 
@@ -55,7 +78,32 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "food_count": len(food_repo.all())}
+    return {
+        "status": "ok",
+        "food_count": len(food_repo.all()),
+        "data_sync": get_sync_status(),
+    }
+
+
+@app.get("/api/data/status")
+def data_status():
+    return get_sync_status()
+
+
+@app.post("/api/data/sync")
+def data_sync():
+    load_backend_env()
+    if not env_flag("ENABLE_DATA_SYNC_ENDPOINT", False):
+        raise HTTPException(
+            status_code=403,
+            detail="데이터 동기화 endpoint가 비활성화되어 있습니다.",
+        )
+    try:
+        metadata = sync_menuzen_data()
+        food_repo.refresh()
+        return metadata
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.get("/api/foods")
