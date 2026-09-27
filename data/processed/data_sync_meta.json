@@ -1,0 +1,16 @@
+{
+  "national_rows": 3366,
+  "menu_rows": 3250,
+  "ingredient_rows": 22582,
+  "usable_game_menus": 1658,
+  "ingredient_mapping_rate": 1.0,
+  "excluded_counts": {
+    "missing_fiber_g": 1802,
+    "missing_sugar_g": 2087,
+    "missing_sodium_mg": 272,
+    "missing_fat_g": 9
+  },
+  "cached_game_menu_count": 50,
+  "full_usable_game_menu_count_from_uploaded_snapshot": 1658,
+  "note": "저장소에는 시연용 실제 데이터 50건을 캐시하며, backend/.env의 서비스키로 sync_menuzen.py 실행 시 메뉴젠 Open API 전체를 다시 수집해 덮어씁니다."
+}
