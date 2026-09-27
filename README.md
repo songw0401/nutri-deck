@@ -1,56 +1,57 @@
-# Nutri-Deck Fullstack
+# Nutri-Deck
 
-뉴트리 덱은 **메뉴젠 음식·재료·조리 정보 Open API + 국가표준식품성분 Database 10.4**를 결합해 음식 카드의 영양정보를 만드는 체험형 영양교육 게임입니다.
+공공데이터 기반 체험형 영양교육 게임입니다. 프로젝트는 **데이터 / FastAPI 백엔드 / React UI**로 분리되어 있습니다.
 
 ```text
 nutri-deck/
-├─ data/                 # 공공데이터 수집·연계·게임 DB 생성
-│  ├─ pipeline/
-│  │  ├─ sync_menuzen.py
-│  │  └─ validate_game_foods.py
-│  ├─ reference/         # 국가표준식품성분 DB 10.4 정규화 기준 데이터
-│  └─ processed/
-│     └─ game_foods.json # 백엔드가 사용하는 마지막 동기화 결과
-├─ backend/              # FastAPI
-└─ frontend/             # React/Vite 게임 UI
+├─ data/
+│  ├─ pipeline/sync_menuzen.py
+│  ├─ processed/game_foods.json
+│  └─ reference/
+├─ backend/
+│  └─ app/
+└─ frontend/
 ```
 
-## 1. 공공데이터 동기화
+## 데이터 구조
 
-메뉴젠 데이터는 저장된 CSV를 원천으로 사용하지 않고 공공데이터포털 Open API에서 직접 수집합니다. 서비스키는 GitHub에 올리지 않고 `backend/.env`에만 보관합니다.
+뉴트리 덱은 두 공공데이터를 역할별로 사용합니다.
 
-```powershell
-copy backend\.env.example backend\.env
-notepad backend\.env
-```
+- **메뉴젠 Open API (data.go.kr 15143502)**: 음식코드, 음식명, 분류, 구성 재료, 재료중량
+- **국가표준식품성분 Database 10.4**: 식품별 100g 기준 영양성분
 
-`backend/.env`에 발급받은 키를 입력합니다.
+서비스는 사용자가 카드를 누를 때마다 공공 API를 호출하지 않습니다. **메뉴젠 API를 수집·검증해 게임용 캐시를 만든 뒤 FastAPI가 그 캐시를 제공**합니다. 따라서 API 지연이나 일일 호출량이 실제 게임 플레이에 직접 영향을 주지 않습니다.
 
-```text
+`menuzen_ingredient.csv`는 런타임 데이터가 아니라 기존 API 수집본을 이용해 `food_Code` crosswalk를 검증하기 위한 개발 자료입니다.
+
+## 1. 메뉴젠 API 연결
+
+`backend/.env.example`을 `backend/.env`로 복사하고 공공데이터포털에서 발급받은 서비스키를 입력합니다.
+
+```env
 DATA_GO_KR_SERVICE_KEY=발급받은_서비스키
 MENUZEN_PAGE_SIZE=20
+SYNC_MENUZEN_ON_STARTUP=false
+ENABLE_DATA_SYNC_ENDPOINT=false
 ```
 
-프로젝트 루트에서 동기화합니다.
+프로젝트 루트에서 공공데이터를 갱신하려면:
 
-```powershell
-.\backend\.venv\Scripts\python.exe data\pipeline\sync_menuzen.py
+```bash
+python data/pipeline/sync_menuzen.py
 ```
 
-동기화 과정은 다음과 같습니다.
+성공하면 다음 파일이 갱신됩니다.
 
-```text
-메뉴젠 Open API
-→ 메뉴/재료/사용량 수집
-→ 국가표준식품성분 DB 10.4 연계
-→ 재료별 영양량 계산
-→ 메뉴 단위 합산
-→ game_foods.json 생성
-```
+- `data/processed/game_foods.json`
+- `frontend/data/foods.json`
+- `data/processed/data_sync_meta.json`
 
-API 장애나 발표 환경을 고려해 저장소에는 마지막 정상 동기화 형식의 실제 공공데이터 메뉴 200건을 캐시해 두며, 위 명령을 실행하면 API 전체 수집 결과로 자동 교체됩니다.
+배포 환경에서 서버 시작 시 자동 갱신하려면 `SYNC_MENUZEN_ON_STARTUP=true`로 설정할 수 있습니다. API가 일시적으로 실패해도 기존 검증 캐시가 있으면 서비스는 계속 실행됩니다.
 
 ## 2. 백엔드 실행
+
+Windows PowerShell 기준:
 
 ```powershell
 cd backend
@@ -59,7 +60,7 @@ py -3.8 -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-## 3. 게임 UI 실행
+## 3. UI 실행
 
 새 PowerShell에서:
 
@@ -71,11 +72,13 @@ npm.cmd run dev
 
 브라우저에서 `http://localhost:5173`을 열면 됩니다.
 
-## 데이터 처리 원칙
+프론트는 백엔드의 `/api/foods`에서 게임 카드 데이터를 불러옵니다. 백엔드가 꺼져 있으면 저장된 검증 캐시를 사용하여 시연이 계속됩니다.
 
-- 메뉴젠 `fd_Code`를 완성 음식 카드 식별자로 사용
-- 메뉴젠의 재료명·식품군을 국가표준식품성분 DB와 연계
-- 재료 영양량 = 국가 DB 100g당 영양값 × 메뉴젠 재료중량(g) / 100
-- 모든 재료를 합산하여 완성 메뉴의 영양성분 산출
-- 필요한 영양소가 누락되거나 매핑이 불명확한 메뉴는 자동 제외
-- API 키와 개인 환경파일은 Git에 커밋하지 않음
+## 데이터 검증 방식
+
+- 기존 메뉴젠 API 수집본의 고유 `food_Code` 1,425개를 국가표준식품성분 DB와 식품명 exact match로 검증
+- 메뉴젠에 출처가 존재하는 항목은 국가DB 출처와도 일치하는지 추가 확인
+- 런타임에서는 `food_Code` crosswalk를 우선 사용
+- API에 새로운 식품코드가 추가되면 국가DB의 고유한 동일 식품명으로만 fallback
+- 매핑 불가, 재료중량 오류, 필수 영양성분 결측이 있는 메뉴는 게임 데이터에서 제외
+- 메뉴 영양량은 `100g당 영양성분 × 실제 재료중량(g) / 100`으로 계산 후 메뉴 단위 합산
