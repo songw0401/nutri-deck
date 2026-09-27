@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 import csv
+import gzip
+import io
 import json
 import os
 import re
@@ -15,8 +18,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-NATIONAL_DB_DIR = PROJECT_ROOT / "data" / "reference"
-NATIONAL_DB_PATTERN = "national_food_10_4_part*.tsv"
+NATIONAL_DB_FILE = PROJECT_ROOT / "data" / "reference" / "national_food_10_4.tsv.gz.b64"
 GAME_DATA_FILE = PROJECT_ROOT / "data" / "processed" / "game_foods.json"
 FRONTEND_FOOD_FILE = PROJECT_ROOT / "frontend" / "data" / "foods.json"
 SYNC_META_FILE = PROJECT_ROOT / "data" / "processed" / "data_sync_meta.json"
@@ -159,6 +161,7 @@ def _parse_menuzen_xml(text: str) -> Dict[str, object]:
 
 
 def _build_url(endpoint: str, service_key: str, page: int, page_size: int) -> str:
+    # 공공데이터포털은 인코딩/디코딩 키를 모두 노출하므로 한 번만 인코딩되도록 정규화한다.
     decoded_key = urllib.parse.unquote(service_key.strip())
     query = urllib.parse.urlencode(
         {
@@ -188,7 +191,7 @@ def _call_page(endpoint: str, service_key: str, page: int, page_size: int) -> Di
         except Exception as exc:
             last_error = exc
             time.sleep(1.0 + attempt * 1.5)
-    raise RuntimeError("메뉴젠 API 호출 실패: {0}".format(last_error))
+    raise RuntimeError("메뉴젠 API 핼출실패: {0}".format(last_error))
 
 
 def _discover_endpoint(service_key: str, page_size: int) -> Tuple[str, Dict[str, object]]:
@@ -201,7 +204,7 @@ def _discover_endpoint(service_key: str, page_size: int) -> Tuple[str, Dict[str,
             errors.append(endpoint + " -> 데이터 0건")
         except Exception as exc:
             errors.append(endpoint + " -> " + str(exc))
-    raise RuntimeError("사용 가능한 메뉴젠 endpoint를 찾지 못했습니다.\n" + "\n".join(errors))
+    raise RuntimeError("사욨 가능합¨하 메뉴젠 endpoint로 찾지 못했습니다.\n" + "\n".join(errors))
 
 
 def fetch_menuzen(service_key: str, page_size: int = 20) -> Tuple[str, List[Dict[str, str]], List[Dict[str, str]]]:
@@ -225,28 +228,30 @@ def fetch_menuzen(service_key: str, page_size: int = 20) -> Tuple[str, List[Dict
 
 
 def _load_national_db() -> List[Dict[str, object]]:
-    files = sorted(NATIONAL_DB_DIR.glob(NATIONAL_DB_PATTERN))
-    if not files:
+    if not NATIONAL_DB_FILE.exists():
         raise FileNotFoundError(
-            "국가표준식품성분 DB 기준 파일이 없습니다: {0}".format(
-                NATIONAL_DB_DIR / NATIONAL_DB_PATTERN
-            )
+            "국가표설 식품성분 DB 기준 파일을 없습니다: {0}".format(NATIONAL_DB_FILE)
         )
 
+    try:
+        encoded = NATIONAL_DB_FILE.read_text(encoding="ascii").strip()
+        packed = base64.b64decode(encoded, validate=True)
+        text = gzip.decompress(packed).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("국가표설 식품성분 DB 기준 파일을 해제하지 못했습니다: {0}".format(exc))
+
     rows: List[Dict[str, object]] = []
-    for path in files:
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            for raw in csv.DictReader(handle, delimiter="\t"):
-                row: Dict[str, object] = dict(raw)
-                for key in NUTRIENT_KEYS:
-                    value = str(row.get(key, "")).strip()
-                    row[key] = None if value == "" else float(value)
-                rows.append(row)
+    with io.StringIO(text) as handle:
+        for raw in csv.DictReader(handle, delimiter="\t"):
+            row: Dict[str, object] = dict(raw)
+            for key in NUTRIENT_KEYS:
+                value = str(row.get(key, "")).strip()
+                row[key] = None if value == "" else float(value)
+            rows.append(row)
 
     if not rows:
         raise ValueError("국가표준식품성분 DB 기준 파일이 비어 있습니다.")
     return rows
-
 
 def _build_lookup(rows: List[Dict[str, object]]) -> Tuple[Dict[Tuple[str, str], List[Dict[str, object]]], Dict[str, List[Dict[str, object]]]]:
     by_name_group: Dict[Tuple[str, str], List[Dict[str, object]]] = defaultdict(list)
@@ -320,7 +325,11 @@ def build_game_foods(menus: List[Dict[str, str]], ingredients: List[Dict[str, st
             missing_nutrient_menus += 1
             continue
 
-        category = menu.get("fd_Grupp_Nm") or menu.get("upper_Fd_Grupp_Nm") or "기타"
+        category = (
+            menu.get("fd_Grupp_Nm")
+            or menu.get("upper_Fd_Grupp_Nm")
+            or "기타"
+        )
         game_foods.append(
             {
                 "food_code": menu_code,
