@@ -1,3 +1,5 @@
+from typing import List
+
 from app.models import Food, NutritionTotals
 
 NUTRIENTS = (
@@ -11,7 +13,7 @@ NUTRIENTS = (
 )
 
 
-def calculate_totals(foods: list[Food]) -> NutritionTotals:
+def calculate_totals(foods: List[Food]) -> NutritionTotals:
     sums = {key: 0.0 for key in NUTRIENTS}
     for food in foods:
         for key in NUTRIENTS:
