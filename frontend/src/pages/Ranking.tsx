@@ -1,0 +1,3 @@
+import { SimplePage } from "../components/SimplePage";
+import { useGame } from "../context/GameContext";
+export function Ranking(){const {matches}=useGame();const rows=matches.flatMap(m=>m.players.map(p=>({name:p.name,score:p.totalScore,winner:m.winnerName===p.name}))).sort((a,b)=>b.score-a.score).slice(0,20);return <SimplePage title="랭킹"><h1 className="text-3xl font-black">랭킹</h1><ol className="mt-6 space-y-2">{rows.length?rows.map((row,i)=><li key={`${row.name}-${i}`} className="flex justify-between rounded-2xl bg-white px-4 py-3 shadow-sm"><span className="font-bold">{i+1}. {row.name}{row.winner?" 🏆":""}</span><span>{row.score}점</span></li>):<li className="text-neutral-500">아직 게임 기록이 없습니다.</li>}</ol></SimplePage>;}
