@@ -17,7 +17,6 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 NATIONAL_DB_FILE = PROJECT_ROOT / "data" / "reference" / "national_food_10_4.tsv.gz.b64"
-CROSSWALK_FILE = PROJECT_ROOT / "data" / "reference" / "menuzen_food_crosswalk.tsv.gz.b64"
 GAME_DATA_FILE = PROJECT_ROOT / "data" / "processed" / "game_foods.json"
 FRONTEND_FOOD_FILE = PROJECT_ROOT / "frontend" / "data" / "foods.json"
 SYNC_META_FILE = PROJECT_ROOT / "data" / "processed" / "data_sync_meta.json"
@@ -241,94 +240,47 @@ def fetch_menuzen(
     return endpoint, list(menu_by_code.values()), ingredients
 
 
-def _load_compressed_tsv(path: Path) -> List[Dict[str, str]]:
-    if not path.exists():
-        raise FileNotFoundError("기준 데이터 파일이 없습니다: {0}".format(path))
+def _load_national_db() -> List[Dict[str, object]]:
+    if not NATIONAL_DB_FILE.exists():
+        raise FileNotFoundError("국가표준식품성분 DB 기준 파일이 없습니다: {0}".format(NATIONAL_DB_FILE))
     try:
-        encoded = path.read_text(encoding="ascii").strip()
+        encoded = NATIONAL_DB_FILE.read_text(encoding="ascii").strip()
         packed = base64.b64decode(encoded, validate=True)
         text = gzip.decompress(packed).decode("utf-8")
     except Exception as exc:
-        raise RuntimeError("기준 데이터 파일을 해제하지 못했습니다: {0}".format(exc))
-    return list(csv.DictReader(io.StringIO(text), delimiter="\t"))
+        raise RuntimeError("국가표준식품성분 DB 기준 파일을 해제하지 못했습니다: {0}".format(exc))
 
-
-def _load_national_db() -> List[Dict[str, object]]:
-    raw_rows = _load_compressed_tsv(NATIONAL_DB_FILE)
     rows: List[Dict[str, object]] = []
-    for raw in raw_rows:
-        row: Dict[str, object] = dict(raw)
-        for key in NUTRIENT_KEYS:
-            value = str(row.get(key, "")).strip()
-            row[key] = None if value == "" else float(value)
-        rows.append(row)
+    with io.StringIO(text) as handle:
+        for raw in csv.DictReader(handle, delimiter="\t"):
+            row: Dict[str, object] = dict(raw)
+            for key in NUTRIENT_KEYS:
+                value = str(row.get(key, "")).strip()
+                row[key] = None if value == "" else float(value)
+            rows.append(row)
     if not rows:
         raise ValueError("국가표준식품성분 DB 기준 데이터가 비어 있습니다.")
     return rows
 
 
-def _load_crosswalk() -> Dict[str, Dict[str, str]]:
-    rows = _load_compressed_tsv(CROSSWALK_FILE)
-    return {
-        row["menuzen_food_code"]: row
-        for row in rows
-        if row.get("menuzen_food_code")
-    }
-
-
-def _build_national_indexes(
+def _build_unique_name_index(
     rows: List[Dict[str, object]]
-) -> Tuple[Dict[str, Dict[str, object]], Dict[str, Dict[str, object]]]:
-    by_index: Dict[str, Dict[str, object]] = {}
-    by_name: Dict[str, Dict[str, object]] = {}
-    duplicate_names = set()
+) -> Tuple[Dict[str, Dict[str, object]], int]:
+    buckets: Dict[str, List[Dict[str, object]]] = defaultdict(list)
     for row in rows:
-        index = str(row.get("national_index", "")).strip()
         name = _normalize_name(str(row.get("food_name", "")))
-        if index:
-            by_index[index] = row
         if name:
-            if name in by_name:
-                duplicate_names.add(name)
-            else:
-                by_name[name] = row
-    for name in duplicate_names:
-        by_name.pop(name, None)
-    return by_index, by_name
-
-
-def _resolve_national_row(
-    ingredient: Dict[str, str],
-    crosswalk: Dict[str, Dict[str, str]],
-    by_index: Dict[str, Dict[str, object]],
-    by_name: Dict[str, Dict[str, object]],
-) -> Tuple[Optional[Dict[str, object]], str]:
-    food_code = (ingredient.get("food_Code") or "").strip()
-    food_name = _normalize_name(ingredient.get("food_Nm", ""))
-
-    mapped = crosswalk.get(food_code)
-    if mapped is not None:
-        expected_name = _normalize_name(mapped.get("menuzen_food_name", ""))
-        national_index = (mapped.get("national_index") or "").strip()
-        if expected_name == food_name and national_index in by_index:
-            return by_index[national_index], "crosswalk"
-        fallback = by_name.get(food_name)
-        if fallback is not None:
-            return fallback, "name_fallback_after_code_change"
-        return None, "code_name_mismatch"
-
-    fallback = by_name.get(food_name)
-    if fallback is not None:
-        return fallback, "name_fallback_new_code"
-    return None, "unmatched"
+            buckets[name].append(row)
+    unique = {name: items[0] for name, items in buckets.items() if len(items) == 1}
+    duplicate_name_count = sum(1 for items in buckets.values() if len(items) > 1)
+    return unique, duplicate_name_count
 
 
 def build_game_foods(
     menus: List[Dict[str, str]], ingredients: List[Dict[str, str]]
 ) -> Tuple[List[Dict[str, object]], Dict[str, object]]:
     national_rows = _load_national_db()
-    crosswalk = _load_crosswalk()
-    by_index, by_name = _build_national_indexes(national_rows)
+    national_by_name, duplicate_name_count = _build_unique_name_index(national_rows)
 
     ingredients_by_menu: Dict[str, List[Dict[str, str]]] = defaultdict(list)
     for ingredient in ingredients:
@@ -337,9 +289,10 @@ def build_game_foods(
             ingredients_by_menu[menu_code].append(ingredient)
 
     game_foods: List[Dict[str, object]] = []
-    mapping_stats = defaultdict(int)
-    missing_nutrient_menus = 0
+    mapped_rows = 0
+    unmatched_rows = 0
     invalid_weight_menus = 0
+    missing_nutrient_menus = 0
     no_ingredient_menus = 0
 
     for menu in menus:
@@ -359,13 +312,13 @@ def build_game_foods(
         has_missing_nutrient = False
 
         for ingredient in menu_ingredients:
-            matched, method = _resolve_national_row(
-                ingredient, crosswalk, by_index, by_name
-            )
-            mapping_stats[method] += 1
+            normalized_name = _normalize_name(ingredient.get("food_Nm", ""))
+            matched = national_by_name.get(normalized_name)
             if matched is None:
+                unmatched_rows += 1
                 usable = False
                 continue
+            mapped_rows += 1
 
             weight = _to_float(ingredient.get("food_Wgh", ""))
             if weight is None or weight < 0:
@@ -409,27 +362,16 @@ def build_game_foods(
             }
         )
 
-    total_mapped = (
-        mapping_stats["crosswalk"]
-        + mapping_stats["name_fallback_after_code_change"]
-        + mapping_stats["name_fallback_new_code"]
-    )
-    total_seen = total_mapped + mapping_stats["code_name_mismatch"] + mapping_stats["unmatched"]
-
+    denominator = mapped_rows + unmatched_rows
     metadata: Dict[str, object] = {
         "menu_count": len(menus),
         "ingredient_row_count": len(ingredients),
-        "crosswalk_size": len(crosswalk),
         "national_reference_rows": len(national_rows),
-        "mapped_by_crosswalk": mapping_stats["crosswalk"],
-        "mapped_by_name_fallback": (
-            mapping_stats["name_fallback_after_code_change"]
-            + mapping_stats["name_fallback_new_code"]
-        ),
-        "code_name_mismatch_rows": mapping_stats["code_name_mismatch"],
-        "unmatched_ingredient_rows": mapping_stats["unmatched"],
-        "ingredient_mapping_coverage": round(total_mapped / total_seen, 6)
-        if total_seen
+        "national_duplicate_food_name_count": duplicate_name_count,
+        "mapped_ingredient_rows": mapped_rows,
+        "unmatched_ingredient_rows": unmatched_rows,
+        "ingredient_mapping_coverage": round(mapped_rows / denominator, 6)
+        if denominator
         else 0,
         "usable_game_menu_count": len(game_foods),
         "excluded_menu_count": len(menus) - len(game_foods),
@@ -495,6 +437,7 @@ def sync_menuzen_data(
         "data_mode": "menuzen_openapi_with_versioned_national_reference",
         "menuzen_source": "공공데이터포털 15143502 / 농식품 식단관리(메뉴젠) 음식, 재료 및 조리 정보",
         "national_db_source": "국가표준식품성분 Database 10.4",
+        "mapping_rule": "normalized exact food-name match against unique national reference names",
         "endpoint": endpoint,
         "page_size": page_size,
     }
