@@ -23,6 +23,10 @@ class FoodRepository:
             raise ValueError("game_foods.json에 중복 food_code가 있습니다.")
         return foods
 
+    def refresh(self) -> Tuple[Food, ...]:
+        self.all.cache_clear()
+        return self.all()
+
     def get(self, food_code: str) -> Optional[Food]:
         return next((food for food in self.all() if food.food_code == food_code), None)
 
