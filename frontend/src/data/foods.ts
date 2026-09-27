@@ -2,9 +2,8 @@ import catalog from "../../data/foods.json";
 import type { Food } from "../types";
 
 /**
- * 목업용 완성 음식 메뉴 데이터.
- * 영양 수치는 국가표준식품성분 DB와 메뉴젠을 연결하기 전의 예시 값이다.
- * 각 항목은 이미 완성된 음식 메뉴 한 가지이며, 카드 한 장에 해당한다.
+ * 마지막 메뉴젠 Open API 동기화 결과를 프론트엔드 폴백 데이터로 사용한다.
+ * 정상 실행 시에는 FastAPI가 data/processed/game_foods.json을 제공한다.
  */
 export const foods = catalog as Food[];
 
