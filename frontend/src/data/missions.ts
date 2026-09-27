@@ -34,7 +34,8 @@ export const level2Mission: Level2Mission = {
   successGap: 50,
 };
 
-export const boardDemoFoodCodes = ["MENU001", "MENU002", "MENU004", "MENU005", "MENU006", "MENU007"] as const;
+// 검증된 공공데이터 캐시에도 항상 존재하는 시연용 카드
+export const boardDemoFoodCodes = ["D011001", "D052001", "D083035", "D140057", "D211036", "D311054"] as const;
 
 export function missionForRound(round: number): Level1Mission {
   const nutrient = studyNutrients[round - 1] ?? studyNutrients[0];
