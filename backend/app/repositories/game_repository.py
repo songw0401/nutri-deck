@@ -1,59 +1,45 @@
 import json
-import sqlite3
-from contextlib import closing
 from typing import Dict, List
 
-from app.core.config import DB_FILE
+from app.core.config import RECORDS_FILE
 from app.models import MatchRecord, RankingItem
 
 
 def init_db() -> None:
-    DB_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with closing(sqlite3.connect(DB_FILE)) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS match_records (
-                id TEXT PRIMARY KEY,
-                played_at TEXT NOT NULL,
-                winner_name TEXT NOT NULL,
-                reached_goal INTEGER NOT NULL,
-                player_count INTEGER NOT NULL,
-                payload_json TEXT NOT NULL
-            )
-            """
-        )
-        conn.commit()
+    RECORDS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    if not RECORDS_FILE.exists():
+        RECORDS_FILE.write_text("[]", encoding="utf-8")
+
+
+def _load_records() -> List[MatchRecord]:
+    init_db()
+    try:
+        raw = json.loads(RECORDS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raw = []
+    return [MatchRecord.model_validate(item) for item in raw]
+
+
+def _save_records(records: List[MatchRecord]) -> None:
+    payload = [json.loads(record.model_dump_json()) for record in records]
+    RECORDS_FILE.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def save_match(record: MatchRecord) -> None:
-    init_db()
-    with closing(sqlite3.connect(DB_FILE)) as conn:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO match_records
-            (id, played_at, winner_name, reached_goal, player_count, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                record.id,
-                record.playedAt,
-                record.winnerName,
-                int(record.reachedGoal),
-                len(record.players),
-                record.model_dump_json(),
-            ),
-        )
-        conn.commit()
+    records = _load_records()
+    records = [item for item in records if item.id != record.id]
+    records.append(record)
+    records.sort(key=lambda item: item.playedAt, reverse=True)
+    _save_records(records)
 
 
 def list_matches(limit: int = 40) -> List[MatchRecord]:
-    init_db()
-    with closing(sqlite3.connect(DB_FILE)) as conn:
-        rows = conn.execute(
-            "SELECT payload_json FROM match_records ORDER BY played_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    return [MatchRecord.model_validate(json.loads(row[0])) for row in rows]
+    records = _load_records()
+    records.sort(key=lambda item: item.playedAt, reverse=True)
+    return records[:limit]
 
 
 def rankings(limit: int = 20) -> List[RankingItem]:
