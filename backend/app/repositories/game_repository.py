@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from typing import Dict, List
 
 from app.core.config import DB_FILE
 from app.models import MatchRecord, RankingItem
@@ -45,7 +46,7 @@ def save_match(record: MatchRecord) -> None:
         conn.commit()
 
 
-def list_matches(limit: int = 40) -> list[MatchRecord]:
+def list_matches(limit: int = 40) -> List[MatchRecord]:
     init_db()
     with closing(sqlite3.connect(DB_FILE)) as conn:
         rows = conn.execute(
@@ -55,9 +56,9 @@ def list_matches(limit: int = 40) -> list[MatchRecord]:
     return [MatchRecord.model_validate(json.loads(row[0])) for row in rows]
 
 
-def rankings(limit: int = 20) -> list[RankingItem]:
+def rankings(limit: int = 20) -> List[RankingItem]:
     records = list_matches(limit=1000)
-    stats: dict[str, dict[str, int]] = {}
+    stats: Dict[str, Dict[str, int]] = {}
     for record in records:
         for player in record.players:
             row = stats.setdefault(player.name, {"best_score": 0, "wins": 0, "games": 0})
