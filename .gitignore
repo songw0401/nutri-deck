@@ -2,16 +2,19 @@
 __pycache__/
 *.py[cod]
 .venv/
-backend/nutri_deck.db
+backend/game_records.json
 
 # Node
 frontend/node_modules/
 frontend/dist/
 
-# Env
+# Env / secrets
 .env
 .env.*
 !.env.example
+
+# Temp data sync files
+*.tmp
 
 # OS / IDE
 .DS_Store
