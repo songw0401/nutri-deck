@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,9 +60,9 @@ def health():
 
 @app.get("/api/foods")
 def get_foods(
-    category: str | None = None,
-    q: str | None = None,
-    limit: int | None = Query(default=None, ge=1, le=200),
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: Optional[int] = Query(default=None, ge=1, le=200),
 ):
     foods = list(food_repo.all())
     if category:
@@ -131,11 +132,11 @@ def create_game_record(record: MatchRecord):
     return record
 
 
-@app.get("/api/game/records", response_model=list[MatchRecord])
+@app.get("/api/game/records", response_model=List[MatchRecord])
 def get_game_records(limit: int = Query(default=40, ge=1, le=200)):
     return list_matches(limit)
 
 
-@app.get("/api/rankings", response_model=list[RankingItem])
+@app.get("/api/rankings", response_model=List[RankingItem])
 def get_rankings(limit: int = Query(default=20, ge=1, le=100)):
     return rankings(limit)
