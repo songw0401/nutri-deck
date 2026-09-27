@@ -3,10 +3,10 @@
 사용법:
     python data/pipeline/validate_game_foods.py
 """
-from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import List, Set
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA_FILE = ROOT / "data" / "processed" / "game_foods.json"
@@ -40,8 +40,8 @@ def main() -> None:
     if not isinstance(rows, list) or not rows:
         raise SystemExit("[FAIL] game_foods.json은 비어 있지 않은 배열이어야 합니다.")
 
-    seen: set[str] = set()
-    errors: list[str] = []
+    seen: Set[str] = set()
+    errors: List[str] = []
 
     for idx, row in enumerate(rows, start=1):
         missing = REQUIRED - set(row)
