@@ -8,7 +8,7 @@
 메뉴젠 Open API (data.go.kr 15143502)
         │ 메뉴/재료/재료중량
         ▼
-food_Code crosswalk + 식품명 검증
+식품명 정규화 + exact match 검증
         │
         ▼
 국가표준식품성분 Database 10.4
@@ -20,7 +20,9 @@ food_Code crosswalk + 식품명 검증
         └─ frontend/data/foods.json
 ```
 
-메뉴젠은 정적 CSV를 읽는 방식이 아니라 `data/pipeline/sync_menuzen.py` 실행 시 **공공데이터포털 Open API를 직접 호출**합니다. API 호출 결과는 전처리·검증 후 게임용 캐시로 저장하여, 사용자가 카드를 누를 때마다 공공 API를 다시 호출하지 않습니다. 이 방식은 API 장애·응답속도·일일 호출량에 게임 플레이가 직접 영향을 받지 않게 합니다.
+메뉴젠은 정적 CSV를 읽는 방식이 아니라 `data/pipeline/sync_menuzen.py` 실행 시 **공공데이터포털 Open API를 직접 호출**합니다. API 호출 결과는 전처리·검증 후 게임용 캐시로 저장하여, 사용자가 카드를 누를 때마다 공공 API를 다시 호출하지 않습니다.
+
+기존 `menuzen_ingredient.csv`는 API 연계 로직의 사전 검증에만 사용했으며 서비스 런타임 입력으로 사용하지 않습니다.
 
 ## 동기화
 
