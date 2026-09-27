@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -29,11 +29,11 @@ class NutritionTotals(BaseModel):
 
 
 class NutritionCalculationRequest(BaseModel):
-    food_codes: list[str] = Field(default_factory=list)
+    food_codes: List[str] = Field(default_factory=list)
 
 
 class NutritionCalculationResponse(BaseModel):
-    foods: list[Food]
+    foods: List[Food]
     totals: NutritionTotals
 
 
@@ -58,9 +58,9 @@ class Level3Condition(BaseModel):
     label: str
     nutrient: str
     op: Literal["between", "gte", "lte"]
-    min: float | None = None
-    max: float | None = None
-    value: float | None = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    value: Optional[float] = None
     unit: str
 
 
@@ -68,7 +68,7 @@ class Level3Mission(BaseModel):
     id: str
     level: Literal[3]
     prompt: str
-    conditions: list[Level3Condition]
+    conditions: List[Level3Condition]
 
 
 class MissionGenerateRequest(BaseModel):
@@ -78,14 +78,14 @@ class MissionGenerateRequest(BaseModel):
 
 class MissionGenerateResponse(BaseModel):
     mission: dict
-    foods: list[Food]
+    foods: List[Food]
 
 
 class MissionEvaluateRequest(BaseModel):
     kind: Literal["level1", "level2", "level3"]
-    selected: Food | None = None
-    dealt: list[Food] = Field(default_factory=list)
-    totals: NutritionTotals | None = None
+    selected: Optional[Food] = None
+    dealt: List[Food] = Field(default_factory=list)
+    totals: Optional[NutritionTotals] = None
     mission: dict
 
 
@@ -102,7 +102,7 @@ class MissionJudgement(BaseModel):
     maxPoints: int
     headline: str
     detail: str
-    conditions: list[ConditionJudgement]
+    conditions: List[ConditionJudgement]
 
 
 class MatchPlayer(BaseModel):
@@ -117,7 +117,7 @@ class MatchRecord(BaseModel):
     playedAt: str
     winnerName: str
     reachedGoal: bool
-    players: list[MatchPlayer]
+    players: List[MatchPlayer]
 
 
 class RankingItem(BaseModel):
