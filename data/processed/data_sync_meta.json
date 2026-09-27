@@ -1,16 +1,15 @@
 {
-  "national_rows": 3366,
-  "menu_rows": 3250,
-  "ingredient_rows": 22582,
-  "usable_game_menus": 1658,
-  "ingredient_mapping_rate": 1.0,
-  "excluded_counts": {
-    "missing_fiber_g": 1802,
-    "missing_sugar_g": 2087,
-    "missing_sodium_mg": 272,
-    "missing_fat_g": 9
-  },
-  "cached_game_menu_count": 50,
-  "full_usable_game_menu_count_from_uploaded_snapshot": 1658,
-  "note": "저장소에는 시연용 실제 데이터 50건을 캐시하며, backend/.env의 서비스키로 sync_menuzen.py 실행 시 메뉴젠 Open API 전체를 다시 수집해 덮어씁니다."
+  "data_mode": "validated_snapshot_cache; runtime source is MenuGen Open API",
+  "menuzen_source": "공공데이터포털 15143502 / 농식품 식단관리(메뉴젠) 음식, 재료 및 조리 정보",
+  "national_db_source": "국가표준식품성분 Database 10.4",
+  "snapshot_menu_count": 3250,
+  "snapshot_ingredient_row_count": 22582,
+  "national_reference_rows": 1388,
+  "snapshot_mapped_ingredient_rows": 22582,
+  "snapshot_unmatched_ingredient_rows": 0,
+  "snapshot_mapping_coverage": 1.0,
+  "snapshot_usable_game_menu_count": 1658,
+  "cached_game_menu_count": 15,
+  "mapping_rule": "normalized exact food-name match against unique national reference names",
+  "note": "menuzen_ingredient.csv는 런타임 입력이 아니라 Open API 연계 로직을 검증한 기존 수집본입니다. 실제 갱신은 sync_menuzen.py가 메뉴젠 Open API를 직접 호출합니다."
 }
