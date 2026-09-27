@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from typing import Dict, List, Optional, Tuple
 
 from app.models import (
     ConditionJudgement,
@@ -36,7 +37,7 @@ LEVEL3_CONDITIONS = [
 ]
 
 
-def generate_mission(level: int, foods: list[Food], card_count: int) -> tuple[dict, list[Food]]:
+def generate_mission(level: int, foods: List[Food], card_count: int) -> Tuple[dict, List[Food]]:
     if len(foods) < 2:
         raise ValueError("게임 문제 생성을 위해 최소 2개의 음식 데이터가 필요합니다.")
     dealt = random.sample(foods, min(card_count, len(foods)))
@@ -68,7 +69,7 @@ def generate_mission(level: int, foods: list[Food], card_count: int) -> tuple[di
     return mission, dealt
 
 
-def evaluate_level1(selected: Food | None, dealt: list[Food], mission: Level1Mission) -> MissionJudgement:
+def evaluate_level1(selected: Optional[Food], dealt: List[Food], mission: Level1Mission) -> MissionJudgement:
     if not dealt:
         raise ValueError("LEVEL 1 평가에는 dealt 음식 목록이 필요합니다.")
     values = [float(getattr(food, mission.nutrient)) for food in dealt]
